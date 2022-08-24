@@ -20,18 +20,18 @@ Accuracy values measured on the test set:
 1. Download and extract CLEVR_v1.0 dataset: http://cs.stanford.edu/people/jcjohns/clevr/
 2. Clone this repository and move into it:
 ```
-git clone https://github.com/mesnico/RelationNetworks-CLEVR
+git clone https://github.com/Scorsess/RelationNetworks-CLEVR
 cd RelationNetworks-CLEVR
 ```
 4. Setup a virtual environment (optional, but recommended)
 ```
-mkdir env
-virtualenv -p /usr/bin/python3 env
-source env/bin/activate
+conda create -n rn_env python=3.8
+conda activate rn_env
+
 ```
 3. Install requirements: 
 ```
-pip3 install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 ## Train
