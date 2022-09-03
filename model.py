@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import math
+import pdb
 
 class ConvInputModel(nn.Module):
     def __init__(self):
@@ -191,7 +192,7 @@ class RN(nn.Module):
             x = self.conv(img)  # (B x 24 x 8 x 8)
             b, k, d, _ = x.size()
             x = x.view(b,k,d*d) # (B x 24 x 8*8)
-            
+
             # add coordinates
             if self.coord_tensor is None or torch.cuda.device_count() == 1:
                 self.build_coord_tensor(b, d)                  # (B x 2 x 8 x 8)
@@ -202,6 +203,7 @@ class RN(nn.Module):
         
         qst = self.text(qst_idxs)
         y = self.rl(x, qst)
+        #pdb.set_trace()
         return y
        
     # prepare coord tensor
