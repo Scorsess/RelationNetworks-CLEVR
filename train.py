@@ -14,10 +14,11 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim import lr_scheduler
-from torch.nn.utils import clip_grad_norm
+from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
-from torchvision import transforms
+import torchvision.transforms as T
 from tqdm import tqdm, trange
+import quantus
 
 import utils
 import math
@@ -43,13 +44,13 @@ def train(data, model, optimizer, epoch, args):
 
         # Gradient Clipping
         if args.clip_norm:
-            clip_grad_norm(model.parameters(), args.clip_norm)
+            clip_grad_norm_(model.parameters(), args.clip_norm)
 
         optimizer.step()
 
         # Show progress
-        progress_bar.set_postfix(dict(loss=loss.data[0]))
-        avg_loss += loss.data[0]
+        progress_bar.set_postfix(dict(loss=loss.data))
+        avg_loss += loss.data
         n_batches += 1
 
         if batch_idx % args.log_interval == 0:
@@ -96,16 +97,18 @@ def test(data, model, epoch, dictionaries, args):
     avg_loss = 0.0
     progress_bar = tqdm(data)
     for batch_idx, sample_batched in enumerate(progress_bar):
-        img, qst, label = utils.load_tensor_data(sample_batched, args.cuda, args.invert_questions, volatile=True)
+        #img, qst, label = utils.load_tensor_data(sample_batched, args.cuda, args.invert_questions, volatile=True)
+        img, qst, label = utils.load_tensor_data(sample_batched, args.cuda, args.invert_questions)
         
         output = model(img, qst)
         pred = output.data.max(1)[1]
 
         loss = F.nll_loss(output, label)
-
+        pdb.set_trace()
         # compute per-class accuracy
-        pred_class = [dictionaries[2][o+1] for o in pred]
-        real_class = [dictionaries[2][o+1] for o in label.data]
+        #pred_class = [dictionaries[2][o+1] for o in pred.numpy()]
+        pred_class = [dictionaries[2][o+1] for o in pred.cpu().numpy()]
+        real_class = [dictionaries[2][o+1] for o in label.cpu().data.numpy()]
         for idx,rc in enumerate(real_class):
             class_corrects[rc] += (pred[idx] == label.data[idx])
             class_n_samples[rc] += 1
@@ -124,7 +127,7 @@ def test(data, model, epoch, dictionaries, args):
         n_samples += len(label)
         assert n_samples == sum(class_n_samples.values()), 'Number of total answers assertion error!'
         
-        avg_loss += loss.data[0]
+        avg_loss += loss.data.item()
 
         if batch_idx % args.log_interval == 0:
             accuracy = corrects / n_samples
@@ -179,16 +182,16 @@ def reload_loaders(clevr_dataset_train, clevr_dataset_test, train_bs, test_bs, s
 
 def initialize_dataset(clevr_dir, dictionaries, state_description=True):
     if not state_description:
-        train_transforms = transforms.Compose([transforms.Resize((128, 128)),
-                                           transforms.Pad(8),
-                                           transforms.RandomCrop((128, 128)),
-                                           transforms.RandomRotation(2.8),  # .05 rad
-                                           transforms.ToTensor()])
-        test_transforms = transforms.Compose([transforms.Resize((128, 128)),
-                                          transforms.ToTensor()])
+        train_T = T.Compose([T.Resize((128, 128)),
+                                           T.Pad(8),
+                                           T.RandomCrop((128, 128)),
+                                           T.RandomRotation(2.8),  # .05 rad
+                                           T.ToTensor()])
+        test_T = T.Compose([T.Resize((128, 128)),
+                                          T.ToTensor()])
                                           
-        clevr_dataset_train = ClevrDataset(clevr_dir, True, dictionaries, train_transforms)
-        clevr_dataset_test = ClevrDataset(clevr_dir, False, dictionaries, test_transforms)
+        clevr_dataset_train = ClevrDataset(clevr_dir, True, dictionaries, train_T)
+        clevr_dataset_test = ClevrDataset(clevr_dir, False, dictionaries, test_T)
         
     else:
         clevr_dataset_train = ClevrDatasetStateDescription(clevr_dir, True, dictionaries)
@@ -242,6 +245,7 @@ def main(args):
     print('Building word dictionaries from all the words in the dataset...')
     dictionaries = utils.build_dictionaries(args.clevr_dir)
     print('Word dictionary completed!')
+    #print(dictionaries)
 
     print('Initializing CLEVR dataset...')
     clevr_dataset_train, clevr_dataset_test  = initialize_dataset(args.clevr_dir, dictionaries, hyp['state_description'])
@@ -252,7 +256,7 @@ def main(args):
     args.adict_size = len(dictionaries[1])
 
     model = RN(args, hyp)
-
+    #pdb.set_trace()
     if torch.cuda.device_count() > 1 and args.cuda:
         model = torch.nn.DataParallel(model)
         model.module.cuda()  # call cuda() overridden method
@@ -346,7 +350,7 @@ def main(args):
                 #scheduler = lr_scheduler.CosineAnnealingLR(optimizer, step, min_lr)
                 print('Dataset reinitialized with batch size {}'.format(bs))
             
-            if((args.lr_max > 0 and scheduler.get_lr()[0]<args.lr_max) or args.lr_max < 0):
+            if((args.lr_max > 0 and scheduler.get_last_lr()[0]<args.lr_max) or args.lr_max < 0): # Change 21 Aug 2022 - get_lr() to get_last_lr()
                 scheduler.step()
                     
             print('Current learning rate: {}'.format(optimizer.param_groups[0]['lr']))
