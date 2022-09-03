@@ -5,6 +5,7 @@ import re
 
 import torch
 from tqdm import tqdm
+import pdb
 
 classes = {
             'number':['0','1','2','3','4','5','6','7','8','9','10'],
@@ -110,9 +111,9 @@ def collate_samples(batch, state_description, only_images):
         collated_batch = torch.stack(images)
     else:
         collated_batch = dict(
-            image=torch.stack(images),
+            image=torch.stack(list(images)),
             answer=torch.stack(answers),
-            question=torch.stack(padded_questions)
+            question=torch.stack(list(padded_questions))
         )
     return collated_batch
 
@@ -130,21 +131,23 @@ def tokenize(sentence):
     return lower
 
 
-def load_tensor_data(data_batch, cuda, invert_questions, volatile=False):
+#def load_tensor_data(data_batch, cuda, invert_questions, volatile=False):
+def load_tensor_data(data_batch, cuda, invert_questions):
     # prepare input
-    var_kwargs = dict(volatile=True) if volatile else dict(requires_grad=False)
+    #var_kwargs = dict(volatile=True) if volatile else dict(requires_grad=False)
+    var_kwargs = dict(requires_grad=False)
 
     qst = data_batch['question']
     if invert_questions:
         # invert question indexes in this batch
         qst_len = qst.size()[1]
         qst = qst.index_select(1, torch.arange(qst_len - 1, -1, -1).long())
+    with torch.no_grad():
+        img = data_batch['image']
+        qst = qst
+        label = data_batch['answer']
 
-    img = torch.autograd.Variable(data_batch['image'], **var_kwargs)
-    qst = torch.autograd.Variable(qst, **var_kwargs)
-    label = torch.autograd.Variable(data_batch['answer'], **var_kwargs)
     if cuda:
         img, qst, label = img.cuda(), qst.cuda(), label.cuda()
-
-    label = (label - 1).squeeze(1)
-    return img, qst, label
+        label = (label - 1).squeeze(1)
+        return img, qst, label
